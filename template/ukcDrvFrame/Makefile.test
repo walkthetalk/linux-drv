@@ -1,0 +1,43 @@
+
+
+udf_dir := $(PWD)
+
+inc_dir += $(TIN_PLF_DIR)/include/driver
+inc_dir += $(subst :, ,$(drv_inc_dir_set))
+inc_dir += $(subst :, ,$(drv_test_inc_set))
+
+#CPPFLAGS += -DDRV_USR_MODE
+
+ifeq ($(DEBUG), y)
+lib_postfix=d
+lib_int_dir=debug
+else
+lib_postfix=
+lib_int_dir=release
+endif
+
+ext_obj_dir := $(output_dir)/$(lib_int_dir)/bin
+
+ifeq ($(DRV_USR_MODE), y)
+prj_name := $(prj_for_card)_drv_testu
+if_sub_dir := test_um
+CPPFLAGS += -DDRV_USR_MODE
+ext_lib_files += $(ext_obj_dir)/lib$(prj_for_card)_drv_ulib$(lib_postfix).a
+else
+prj_name := $(prj_for_card)_drv_testk
+if_sub_dir := test_km
+#LDLIBS += -l$(prj_for_card)_drv_klib
+ext_lib_files += $(ext_obj_dir)/lib$(prj_for_card)_drv_klib$(lib_postfix).a
+endif
+LDLIBS += -lrt
+src_dir_set += $(subst :, ,$(drv_test_dir_set))
+
+OPEXE := y
+#static lib
+OPSLIB := n
+#dynamic lib
+OPDLIB := n
+
+include mf.base
+
+

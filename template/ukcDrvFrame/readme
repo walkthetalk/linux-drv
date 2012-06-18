@@ -1,0 +1,59 @@
+==名字說明==
+	dbh	d: driver	b: bottom	h: half
+	dth	d: driver	t: top		h: half
+
+	ukc	u: user		k: kernel	c: convert
+
+==目錄功能==
+	user mode driver:
+		bh		is the driver	(ukc_kernel)
+		th + bh_lib	is the lib	(ukc_usr)
+	kernel mode driver:
+		th + bh		is the driver	(ukc_kernel)
+		th_lib		is the lib	(ukc_usr)
+
+	./src/test中是測試用代碼，最終生成一個可執行程序來測試驅動
+
+	./src/ukc_kernel
+	./src/ukc_usr
+	中存放的是驅動所用到的外部函數的實現，一個對應內核態，另一個對應用戶態
+	./include/ukc*.h則是上面實現的頭文件
+
+==接口說明==
+	驅動所有代碼基本都放在th目錄中
+	接口定義在include/udf_ioctl_macro.h中，如：
+	udf_IOCTL_MACRO(N, udf_reset, int)
+	第一個參數表明是要讀還是要寫，N表示即不是讀也不是寫，R/W/WR
+	第二個參數是接口的名字，記為inf
+	第三個參數是接口的參數類型，記為type。必須是plain structure，即必須是C語言的類型，且，可以是結構體，但是結構體不能有指針。
+	則接口原型為int inf(udf_rep_th_t this, type * arg).
+
+	***用戶可根據需要添加接口，當然由於其限制，用戶可以根據需要在其上加以封裝，以方便使用。將接口的實現需要包含文件#include "udf_dth.h"，供编译器进行原型校验。
+	***用戶還需要填充結構體Sudf_DRV_DATA，（文件./src/th/udf_dth.c）此結構體存儲驅動中單板實例所對應的所有數據。並在udf_th_open和udf_th_release兩個函數中添加相應的構造和析構此結構體的代碼（如果open失敗，需要用戶在open中處理資源回收等工作）。函數udf_th_read中用戶需要添加代碼，將中斷的處理結構拷貝到上層應用提供的buffer中。
+	***文件./src/th/udf_dth.c中的函數udf_int_handler用來處理單板的中斷，如果找到了中斷源並清除了中斷（然後處理中斷），則返回一個大於0的數，如果沒有找到任何中斷源，則代表系統出了問題（因為我們沒有中斷共享），最好返回一個小於0的數，這樣PDM驅動不會再次打開此單板的中斷。這時候到底該怎麼處理可能需要視具體情況而定。
+
+	***在./src/udf_drv.c中函數udf_online中，用戶可能需要添加一些邏輯來校驗單板類型和槽位之間的關係，比如，某種單板只允許插入某個槽位等。
+
+	***設備文件名：./src/cp/udf_tbc.c，其中的設備文件名需要根據單板類型做相應修改。
+
+	總之：驅動開發人員要寫的代碼基本全部位於./src/th目錄中。而對於使用驅動的代碼所需要的僅僅是包含頭文件./include/udf_dth.h，用udf_th_open打開設備，用udf_th_release關閉設備，用udf_th_read讀取驅動中的新數據（一般是中斷處理後的數據，請參見問題2），用udf_ioctl_macro.h（已經有udf_dth.h包含）中的接口來操作控制驅動。另外還有一處需要改動的，請參見問題3.
+
+	目前用戶新加接口無須做互斥，當然要保證只有一個線程使用此設備。在內核側所有操作都已經加了互斥，包括中斷處理都有互斥。
+
+
+==編譯==
+	./cl.sh y y clean
+	其中，第一個參數y代表是要編譯用戶態的驅動，n代表內核態
+	第二個參數y表示debug版，n代表release版
+	第三個參數clean相當於make clean，不填相當於make all
+
+	編譯後的結構放在./release/bin，或./debug/bin中。
+
+==問題==
+	1. 目前底層提供的代碼，如果讀寫寄存器的接口都帶有一個參數udf_bh_rep_t，後面可能會考慮將其做成全局變量，此變量在用戶模式下代表設備文件描述符，在內核模式下目前還未看到其用處，暫時保留。
+	2. 對於上層接口，還要進一步考慮對select/poll的支持，一是從udf_th_rep_t獲取fd供調度模型中poll時使用，另外對於一般的fd來講，poll/read是成對出現的，但是對於此驅動框架來說，不能直接read fd，因為用戶模式的驅動中，中斷的處理實際上是在用戶空間做的，因此select/poll返回後，需要調用udf_th_read，但是此函數需要驅動的數據指針udf_th_rep_t。言而總之，需要udf_th_rep_t和fd之間的相互轉換，知道其中一個，如何獲取另一個。由前者獲取後者沒有問題，但反向操作可能需要對調度模型中的poll做一些相應的修改。此部分還需要進一步考慮。
+	3. 雖是驅動框架，但所有內容使用的都是udf***，因此用於其它單板時請將文件名和文件中的關鍵字*udf*替換成相應單板的標識，本來想做成更通用的，但是怕不同驅動中文件同名影響調試，而且現在還沒有想到一種好辦法來處理這個事情，暫時擱置。在./include/ext_inc.h中有一個宏*udf_IOC_MAGIC*，在用於其它單板時，請驅動開發人員修改此數（防止對設備文件的誤操作，比如你想打開udf的設備文件，卻打開了mvb的設備文件，當然目前來講我們的設備文件名中攜帶了板類型的信息，這種情況基本不會出現；參見./src/cp/udf_tbc.c，其中定義了設備文件名）。
+
+
+
+

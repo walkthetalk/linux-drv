@@ -1,0 +1,421 @@
+# author: Ni Qingliang
+# data: 20090918
+# NOTE:
+#    1. CMD_MKDIR must support -p option
+#####################################################################
+###################user defined variables############################
+#####################################################################
+#prj_name
+#prj_name := p1
+ext_bin_dir := $(TINRDIR)/bin
+ext_lib_dir := $(TINRDIR)/bin
+#include $(prj_dir)/makefile.in
+#####################################################################
+###############################parameter#############################
+#####################################################################
+CPPFLAGS += $(TIN_CPPFLAGS_CMM)
+
+ifeq ($(DEBUG),y)
+  CXXFLAGS += -ggdb
+  CFLAGS += -ggdb
+  CPPFLAGS += -DDEBUG
+  tar_name := debug
+  bin_name := $(prj_name)d
+else
+  CXXFLAGS += -O2
+  CFLAGS += -O2
+  tar_name := release
+  bin_name := $(prj_name)
+endif
+
+sharedlib_name := $(bin_name).so
+staticlib_name := lib$(bin_name).a
+
+
+#####################################################################
+###############################user defined command##################
+#####################################################################
+CMD_MKDIR := mkdir
+CMD_RM := rm -f
+CMD_AR := ar
+CMD_CP := cp
+
+
+#####################################################################
+###################pre-defined variables############################
+#####################################################################
+#include dir
+inc_dir += $(TINRDIR)/include
+#source dir
+#src_dir += $(prj_dir)/src
+#bin file
+bin_dir := $(output_dir)/$(tar_name)/bin
+#intermedia files dir
+if_dir := $(output_dir)/$(tar_name)/$(if_sub_dir)
+udf_if_dir := $(if_dir)/udf
+ext_if_dir := $(if_dir)/ext
+
+#####################################################################
+###################auto derived variables############################
+#####################################################################
+#output_file
+bin_files := $(bin_dir)/$(bin_name) $(bin_dir)/$(sharedlib_name) $(bin_dir)/$(staticlib_name)
+src_dirs_tmp := $(shell find $(src_dir_set) -type d)
+src_dirs = $(filter-out $(src_dir)/%.svn%,$(src_dirs_tmp))
+
+define ext_src_dirs_tmp
+$(shell find $(word $1,$(ext_src_dir_set)) -type d)
+endef
+
+define get_ext_src_dir
+$(filter-out %.svn%,$(call ext_src_dirs_tmp,$1))
+endef
+
+#$(warning ext_src_dirs1 is $(call get_ext_src_dir,1))
+#$(warning ext_src_dirs2 is $(call get_ext_src_dir,2))
+
+#########################intermedia files dirs
+udf_if_dirs := $(patsubst $(src_dir)%,$(udf_if_dir)%,$(src_dirs))
+
+ext_if_dir_example:=1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+ext_if_dirs_tmp:=$(wordlist 1,$(words $(ext_src_dir_set)),$(ext_if_dir_example))
+#external if dir (only root)
+ext_if_dirs:=$(addprefix $(ext_if_dir)/,$(ext_if_dirs_tmp))
+
+#$(warning ext_if_dirs is $(ext_if_dirs))
+
+###########################source files
+sources := $(foreach tmp_dir, $(src_dirs), $(wildcard $(tmp_dir)/*.cpp) $(wildcard $(tmp_dir)/*.c))
+
+define ext_sources
+$(foreach tmp_dir,$(call get_ext_src_dir,$1),$(wildcard $(tmp_dir)/*.cpp) $(wildcard $(tmp_dir)/*.c))
+endef
+
+#$(warning ext_sources1 is $(call ext_sources,1))
+#$(warning ext_sources2 is $(call ext_sources,2))
+
+###########################object files
+obj_files := $(patsubst $(src_dir)/%,$(udf_if_dir)/%.o,$(sources))
+
+define get_ext_obj_file
+$(patsubst $(word $1,$(ext_src_dir_set))/%,$(word $1,$(call ext_if_dirs, $1))/%.o,$(call ext_sources,$1))
+endef
+
+#$(warning get_ext_obj_file1 is $(call get_ext_obj_file,1))
+#$(warning get_ext_obj_file2 is $(call get_ext_obj_file,2))
+
+ext_obj_files := $(foreach nth, $(ext_if_dirs_tmp), $(call get_ext_obj_file, $(nth)))
+
+#$(warning ext_obj_files is $(ext_obj_files))
+
+
+#############################dependency files
+depen_files := $(patsubst $(src_dir)/%,$(udf_if_dir)/%.d,$(sources))
+
+ext_depen_files := $(patsubst %.o,%.d,$(ext_obj_files))
+
+#$(warning ext_depen_files is $(ext_depen_files))
+
+
+#####################################################################
+###############################internal command######################
+#####################################################################
+#a safe mkdir version
+define mkdir_if_not_exist
+  $(if $(wildcard $1),,$(shell $(CMD_MKDIR) -p $1))
+endef
+#create if directory structure
+define build_if_dirs
+  $(foreach tmp_dir, $(udf_if_dirs), $(call mkdir_if_not_exist,$(tmp_dir)))
+  $(foreach tmp_dir, $(dir $(ext_obj_files)), $(call mkdir_if_not_exist,$(tmp_dir)))
+endef
+#include search directory command parameter
+CMD_INC_DIR := $(foreach dir, $(inc_dir), -I $(dir))
+
+#####################################################################
+#############################compile option##########################
+#####################################################################
+CXXFLAGS += -Wall -Werror -fPIC -m32
+CFLAGS += -Wall -Werror -fPIC -m32
+CPPFLAGS += $(CMD_INC_DIR)  -D_GNU_SOURCE
+#TARGET_ARCH = ?
+LDFLAGS += -L $(ext_lib_dir)
+LD.cpp := $(LD) $(LDFLAGS) $(TARGET_ARCH)
+
+#####################################################################
+###############################main target###########################
+#####################################################################
+ifeq ($(OPEXE),y)
+  CMD_OUTPUT_EXE := $(LINK.cpp) $(LDLIBS) -o $(bin_dir)/$(bin_name) $(obj_files) $(ext_obj_files) $(ext_lib_files)
+else
+  CMD_OUTPUT_EXE :=
+#@echo "  no output exe"
+endif
+
+ifeq ($(OPDLIB),y)
+  CMD_OUTPUT_DLIB := $(LD.cpp) -shared -o $(bin_dir)/$(sharedlib_name) $(obj_files)
+else
+  CMD_OUTPUT_DLIB :=
+#@echo "  no output dynamic lib"
+endif
+
+ifeq ($(OPSLIB),y)
+  CMD_OUTPUT_SLIB := @$(CMD_AR) -r $(bin_dir)/$(staticlib_name) $(obj_files) $(ext_obj_files)
+else
+  CMD_OUTPUT_SLIB :=
+#@echo "  no output static lib"
+endif
+
+
+.PHONY:all
+all: build_output_dirs $(obj_files) $(ext_obj_files)
+	$(CMD_OUTPUT_EXE)
+	$(CMD_OUTPUT_SLIB)
+	$(CMD_OUTPUT_DLIB)
+
+################################################################################
+########################build output directory -currently not used##############
+################################################################################
+.PHONY:build_output_dirs
+build_output_dirs:
+	@echo "  MKDIR bin dir"
+	$(call mkdir_if_not_exist,$(bin_dir))
+	@echo "  MKDIR obj dir"
+##############################
+#because the build_output_dirs's work has been done already after include depen
+#files, so there is no need to see it as *all*'s dependency
+##############################
+#	$(call build_if_dirs)
+
+################################################################################
+########################object files############################################
+################################################################################
+$(udf_if_dir)/%.c.o:$(src_dir)/%.c
+	@echo "  CC [M]  $(notdir $<)"
+	@$(COMPILE.c) $< -o $@
+$(udf_if_dir)/%.cpp.o:$(src_dir)/%.cpp
+	@echo "  CC [M]  $(notdir $<)"
+	@$(COMPILE.cpp) $< -o $@
+
+#define getlv1dir
+#$(firstword $(subst /, ,$1))
+#endef
+#define getremdir
+#$(patsubst $(call getlv1dir,$1)/%,%,$1)
+#endef
+#$(warning test_getlv1dir1 $(patsubst %,$(call getlv1dir,%),1/b/fdas/fdas))
+#$(warning test_getlv1dir $(call getlv1dir, 1/b/fdas/fdas))
+#$(warning test_getremdir $(call getremdir, 1/b/fdas/fdas))
+
+#$(warning ext_if_dir is $(ext_if_dir))
+
+#I can't find one method to pass '%' to a function, so sorry
+#$(ext_if_dir)/%.c.o:$(word $(call getlv1dir,%/a),$(ext_src_dir_set))/$(call getremdir,%).c
+#	$(COMPILE.c) $< -o $@
+$(ext_if_dir)/1/%.c.o:$(word 1,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/2/%.c.o:$(word 2,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/3/%.c.o:$(word 3,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/4/%.c.o:$(word 4,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/5/%.c.o:$(word 5,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/6/%.c.o:$(word 6,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/7/%.c.o:$(word 7,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/8/%.c.o:$(word 8,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/9/%.c.o:$(word 9,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/10/%.c.o:$(word 10,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/11/%.c.o:$(word 11,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/12/%.c.o:$(word 12,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/13/%.c.o:$(word 13,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/14/%.c.o:$(word 14,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/15/%.c.o:$(word 15,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+$(ext_if_dir)/16/%.c.o:$(word 16,$(ext_src_dir_set))/%.c
+	@echo "  CC [M]  $<"
+	@$(COMPILE.c) $< -o $@
+
+
+$(ext_if_dir)/1/%.cpp.o:$(word 1,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/2/%.cpp.o:$(word 2,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/3/%.cpp.o:$(word 3,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/4/%.cpp.o:$(word 4,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/5/%.cpp.o:$(word 5,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/6/%.cpp.o:$(word 6,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/7/%.cpp.o:$(word 7,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/8/%.cpp.o:$(word 8,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/9/%.cpp.o:$(word 9,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/10/%.cpp.o:$(word 10,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/11/%.cpp.o:$(word 11,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/12/%.cpp.o:$(word 12,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/13/%.cpp.o:$(word 13,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/14/%.cpp.o:$(word 14,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/15/%.cpp.o:$(word 15,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+$(ext_if_dir)/16/%.cpp.o:$(word 16,$(ext_src_dir_set))/%.cpp
+	@echo COMPILE.cpp $<
+	@$(COMPILE.cpp) $< -o $@
+#####################################################################
+########################dependency files#############################
+#####################################################################
+#comments
+#in sed command, the `$*' represents the `%' in the first line
+#the `$@' represents the target name
+#$(basename $(notdir $<)):	if src file is `./src/abc.cpp', then 
+#result is `abc', the sed commmand will search the `abc.o' and 
+#replace it with `./obj/abc.cpp.o ./obj/abc.cpp.d'
+#if you get the warning like "/bin/sh: line 3: xxx.d.23822: No such file or directory"
+#then it means, the directory of .d file is not exist, so it can't gen .d file.
+
+define mf_gen_depen_file
+  $(call mkdir_if_not_exist,$(dir $1))
+  @set -e; \
+  $(CMD_RM) $1; \
+  $(COMPILE.cc) -MM  $2 > $1.$$$$; \
+  sed 's,\($(basename $(notdir $2))\)\.o[ :]*,$(udf_if_dir)/$*.o $1 : ,g' < $1.$$$$ > $1; \
+  $(CMD_RM) $1.$$$$
+endef
+
+define mf_gen_ext_depen_file
+  $(call mkdir_if_not_exist,$(dir $1))
+  @set -e; \
+  $(CMD_RM) $1; \
+  $(COMPILE.cc) -MM  $2 > $1.$$$$; \
+  sed 's,\($(basename $(notdir $2))\)\.o[ :]*,$(patsubst %.d,%.o,$1) $1 : ,g' < $1.$$$$ > $1; \
+  $(CMD_RM) $1.$$$$
+endef
+
+$(udf_if_dir)/%.d:$(src_dir)/%
+	$(call mf_gen_depen_file, $@, $<)
+
+$(ext_if_dir)/1/%.d:$(word 1,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/2/%.d:$(word 2,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/3/%.d:$(word 3,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/4/%.d:$(word 4,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/5/%.d:$(word 5,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/6/%.d:$(word 6,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/7/%.d:$(word 7,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/8/%.d:$(word 8,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/9/%.d:$(word 9,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/10/%.d:$(word 10,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/11/%.d:$(word 11,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/12/%.d:$(word 12,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/13/%.d:$(word 13,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/14/%.d:$(word 14,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/15/%.d:$(word 15,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+$(ext_if_dir)/16/%.d:$(word 16,$(ext_src_dir_set))/%
+	$(call mf_gen_ext_depen_file, $@, $<)
+
+
+#####################################################################
+########################include dependency files#####################
+#####################################################################
+sinclude $(depen_files)
+sinclude $(ext_depen_files)
+
+#####################################################################
+########################   clean   ##################################
+#####################################################################
+.PHONY:distclean clean
+distclean clean:
+	@echo "cleaning"
+	-@$(CMD_RM) $(obj_files)
+	-@$(CMD_RM) $(ext_obj_files)
+	-@$(CMD_RM) $(depen_files)
+	-@$(CMD_RM) $(ext_depen_files)
+	-@$(CMD_RM) $(bin_files)
+	@echo "clean done"
+
+#####################################################################
+########################  install  ##################################
+#####################################################################
+.PHONY:install
+install:
+	$(CMD_CP) $(bin_files) $(ext_lib_dir)
+
+

@@ -1,0 +1,40 @@
+
+#ifndef UDF_IOCTL_MACRO
+#error "please define macro *UDF_IOCTL_MACRO*"
+#else
+
+/*
+ * @1st: N-not R not W
+ *       R-read
+ *       W-write
+ *       WR-write+read
+ * @2nd: the interface's name used by upper layer app
+ * @3rd: the type of parameter, it will be the *3rd* interface's parameter, but
+ *       *type **
+ */
+/*
+ * use the macro ***_ENCAP* to unfold the argument if it is a macro
+ */
+#define UDF_IOCTL_MACRO_ENCAP(x, y, z) UDF_IOCTL_MACRO(x, y, z)
+UDF_IOCTL_MACRO_ENCAP(N, UDF_FUNC(udf_reset), int)
+UDF_IOCTL_MACRO_ENCAP(W, UDF_FUNC(udf_hello), int)
+UDF_IOCTL_MACRO_ENCAP(W, UDF_FUNC(udf_enable_int), int)
+UDF_IOCTL_MACRO_ENCAP(W, UDF_FUNC(udf_query_online), int)
+UDF_IOCTL_MACRO_ENCAP(R, UDF_FUNC(udf_get_mem_size), unsigned int)
+/*
+ * user-defined interface
+ */
+#include UDF_DRV_IF_DEF_FILE_NAME
+
+/*
+ * undefine the macro.
+ */
+#undef UDF_IOCTL_MACRO_ENCAP
+#undef UDF_IOCTL_MACRO
+
+
+#endif
+
+
+
+

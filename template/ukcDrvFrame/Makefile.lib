@@ -1,0 +1,61 @@
+
+#project directory
+udf_dir := $(PWD)
+#output directory
+#output_dir := ./haha
+#drv_src_dir :=
+#$(warning udf_dir is $(udf_dir))
+#$(warning output_dir is $(output_dir))
+
+#$(warning ext_src_dir_set is $(ext_src_dir_set))
+
+#ext_output_dir_tmp:=$(notdir $(ext_src_dir_set))
+#ext_output_dir_set:=$(addprefix $(output_dir)/, $(ext_output_dir_tmp))
+
+#main include directory
+inc_dir += $(TIN_PLF_DIR)/include/driver
+inc_dir += $(TIN_PLF_DIR)/include/utility
+inc_dir += $(udf_dir)/../inc/utility
+inc_dir += $(udf_dir)/include
+inc_dir += $(subst :, ,$(drv_inc_dir_set))
+
+#NOTE: indeed, if user mode driver, it only need the user-interface header file.
+inc_dir += $(subst :, ,$(drv_kinc_dir_set))
+
+#main source directory
+src_dir := $(udf_dir)/src
+
+ifeq ($(DRV_USR_MODE), y)
+prj_name := $(prj_for_card)_drv_ulib
+if_sub_dir := obj_um
+CPPFLAGS += -DDRV_USR_MODE
+#src_dir_set += $(drv_src_dir)
+src_dir_set += $(src_dir)/th
+ext_src_dir_set += $(subst :, ,$(drv_src_dir_set))
+src_dir_set += $(src_dir)/bh_lib
+else
+prj_name := $(prj_for_card)_drv_klib
+if_sub_dir := obj_km
+src_dir_set += $(src_dir)/th_lib
+#ext_src_dir_set is NULL
+endif
+
+ext_src_dir_set += $(subst :, ,$(drv_prd_dir_set))
+
+#src_dir_set += $(udf_dir)/../inc/utility
+src_dir_set += $(src_dir)/ukc_usr
+src_dir_set += $(src_dir)/cp
+src_dir_set += $(src_dir)/fpga
+
+#CFLAGS += -std=c99
+
+OPEXE := n
+#static lib
+OPSLIB := y
+#dynamic lib
+OPDLIB := n
+
+include mf.base
+
+
+

@@ -1,0 +1,37 @@
+#pragma once
+
+#include "drv_self_cfg.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define UDF_GEN_TOKEN(x,subfix) x##subfix
+#define UDF_GEN_TOKEN_ENCAP(x,subfix) UDF_GEN_TOKEN(x,subfix)
+
+#define UDF_VAR_SUBFIX(x) _##x
+#define UDF_VAR_SUBFIX_ENCAP(x) UDF_VAR_SUBFIX(x)
+#define UDF_FUNC_SUBFIX(x) _##x##_fn
+#define UDF_FUNC_SUBFIX_ENCAP(x) UDF_FUNC_SUBFIX(x)
+#define UDF_TYPE_SUBFIX(x) _##x##_t
+#define UDF_TYPE_SUBFIX_ENCAP(x) UDF_TYPE_SUBFIX(x)
+
+#define UDF_VAR(x) UDF_GEN_TOKEN_ENCAP(x, UDF_VAR_SUBFIX_ENCAP(UDF_TOKEN_SUBFIX))
+#define UDF_FUNC(x) UDF_GEN_TOKEN_ENCAP(x, UDF_FUNC_SUBFIX_ENCAP(UDF_TOKEN_SUBFIX))
+#define UDF_TYPE(x) UDF_GEN_TOKEN_ENCAP(x, UDF_TYPE_SUBFIX_ENCAP(UDF_TOKEN_SUBFIX))
+
+
+#define UDF_JOIN(x,y) x##y
+#define UDF_JOIN_ENCAP(x,y) UDF_JOIN(x,y)
+#define UDF_TOKEN_KSUBFIX UDF_JOIN_ENCAP(UDF_TOKEN_SUBFIX,k)
+
+#define UDF_KVAR(x) UDF_GEN_TOKEN_ENCAP(x, UDF_VAR_SUBFIX_ENCAP(UDF_TOKEN_KSUBFIX))
+#define UDF_KFUNC(x) UDF_GEN_TOKEN_ENCAP(x, UDF_FUNC_SUBFIX_ENCAP(UDF_TOKEN_KSUBFIX))
+#define UDF_KTYPE(x) UDF_GEN_TOKEN_ENCAP(x, UDF_TYPE_SUBFIX_ENCAP(UDF_TOKEN_KSUBFIX))
+
+#ifdef __cplusplus
+}
+#endif
+
+
+

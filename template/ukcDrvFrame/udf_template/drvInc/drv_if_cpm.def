@@ -1,0 +1,44 @@
+/*
+ * define your own interface
+ */
+
+/*
+ * NOTE:
+ * TODO:
+ * please check this file's name, and *UDF_DRV_IF_DEF_FILE_NAME* in
+ * your cfg file, they must be same.
+ */
+
+/*
+ * macro name: *UDF_IOCTL_MACRO_ENCAP*
+ * argument:
+ * @1st: N-not R not W
+ *       R-read
+ *       W-write
+ *       WR-write+read
+ * @2nd: the interface's name used by upper layer app
+ * @3rd: the type of parameter, it will be the *3rd* interface's parameter, but
+ *       *type **
+ */
+UDF_IOCTL_MACRO_ENCAP(W, udf_drv_test_if_cpm_fn, cpm_ds_test_if_t)
+
+
+/*
+ * TODO: add your own interface above this line, please ensure new interface
+ * located at the end of all interfaces. (for product update/upgrade)
+ * NOTE:
+ *     it's best to write a subfix at the end of the name of interfaces to
+ *     represent the card type, e.g. the subfix can be *cpm_fn*, in which
+ *     the *cpm* represents the card type, *fn* represents a function.
+ *     the same reason, for the 3rd argument of the macro, the name should
+ *     also has some identification to represents card type; the example
+ *     in here has a prefix *cpm_*, whose mean is same as the function
+ *     name.
+ * NOTE:
+ *     don't bother of the use of macro, I know there will be some difficult
+ *     to read the code, the macro here is for code-autogeneration, e.g.
+ *     in user space, all interfaces will be convert to ioctl call, and
+ *     in kernel space, the *ioctl* will be dispatch to all interfaces.
+ */
+
+
